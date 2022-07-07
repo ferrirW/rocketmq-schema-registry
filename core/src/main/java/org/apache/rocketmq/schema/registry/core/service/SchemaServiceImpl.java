@@ -53,7 +53,7 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
 
     private final DependencyService dependencyService;
 
-    private IdGenerator idGenerator;
+    private final IdGenerator idGenerator;
 
     public SchemaServiceImpl(
         final GlobalConfig config,
@@ -130,6 +130,11 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
         List<SchemaRecordInfo> currentRecords = new ArrayList<>(current.getDetails().getSchemaRecords());
         currentRecords.add(updateRecord);
         update.getDetails().setSchemaRecords(currentRecords);
+
+        if (config.isUploadEnabled()) {
+            Dependency dependency = dependencyService.compile(update);
+            update.setLastRecordDependency(dependency);
+        }
 
         log.info("Updating schema info {}: {}", qualifiedName, update);
         storageServiceProxy.update(qualifiedName, update);
