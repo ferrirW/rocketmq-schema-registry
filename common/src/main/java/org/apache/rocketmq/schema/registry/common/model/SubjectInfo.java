@@ -18,7 +18,6 @@
 package org.apache.rocketmq.schema.registry.common.model;
 
 import java.io.Serializable;
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,5 +32,21 @@ import lombok.NoArgsConstructor;
 public class SubjectInfo implements Serializable {
     private static final long serialVersionUID = -92808722007777844L;
 
-    private List<String> topics;
+    private String cluster;
+    private String subject;
+
+    public String fullName() {
+        return cluster + '/' + subject;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("{");
+        sb.append("\"cluster\":\"")
+            .append(cluster).append('\"');
+        sb.append(",\"subject\":\"")
+            .append(subject).append('\"');
+        sb.append('}');
+        return sb.toString();
+    }
 }

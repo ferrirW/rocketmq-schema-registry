@@ -86,4 +86,12 @@ public interface JsonConverter {
      * @return JSON string
      */
     String toString(Object o);
+
+    /**
+     * Converts String to bytes.
+     *
+     * @param s string array
+     * @return byte array
+     */
+    byte[] toBytes(String s);
 }

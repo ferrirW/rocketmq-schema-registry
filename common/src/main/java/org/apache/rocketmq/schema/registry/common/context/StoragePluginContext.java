@@ -34,22 +34,4 @@ public class StoragePluginContext {
      * global config
      */
     private final GlobalConfig config;
-
-//    public StoragePluginContext(
-//        GlobalConfig config,
-//        Properties properties
-//    ) {
-//        if (properties.getProperty("storage.type", "rocketmq") == null) {
-//            throw new SchemaException("");
-//        }
-//
-//        String storageType = properties.getProperty("storage.type", "ROCKETMQ");
-//        this.storageType = StorageType.valueOf(storageType.toUpperCase());
-//        this.config = config;
-//        this.properties = properties;
-//
-//        String namesrv = properties.getProperty("namesrv");
-//        String ak = properties.getProperty("access.key");
-//        String sk = properties.getProperty("secret.key");
-//    }
 }

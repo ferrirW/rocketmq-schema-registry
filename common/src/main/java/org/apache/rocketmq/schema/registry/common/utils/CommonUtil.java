@@ -66,7 +66,7 @@ public class CommonUtil {
     }
 
     public static boolean isQualifiedNameEmpty(QualifiedName qualifiedName) {
-        return Strings.isNullOrEmpty(qualifiedName.getTenant()) || Strings.isNullOrEmpty(qualifiedName.getName());
+        return Strings.isNullOrEmpty(qualifiedName.getTenant()) || Strings.isNullOrEmpty(qualifiedName.getSchema());
     }
 
     public static List<File> listFiles(File path) {
@@ -236,7 +236,7 @@ public class CommonUtil {
                     existing.add(new Schema.Parser().parse(current.getLastRecordIdl()));
                     validator.validate(toValidate, existing);
                 } catch (SchemaValidationException e) {
-                    throw new SchemaCompatibilityException("", e);
+                    throw new SchemaCompatibilityException("Schema validation failed", e);
                 }
                 break;
             default:

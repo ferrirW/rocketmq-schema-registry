@@ -33,21 +33,21 @@ import org.apache.rocketmq.schema.registry.common.model.Dependency;
 @NoArgsConstructor
 public class SchemaRecordDto {
 
+    @ApiModelProperty(value = "Schema name", required = true)
+    private String schema;
+
+    @ApiModelProperty(value = "Schema unique id", required = true)
+    private long schemaId;
+
     @ApiModelProperty(value = "Version of this schema record")
     private long version;
 
     @ApiModelProperty(value = "IDL of this schema record", required = true)
     private String idl;
 
-    @ApiModelProperty(value = "Filed of this schema record")
-    private List<FieldDto> fields;
-
     @ApiModelProperty(value = "Dependency of this schema record")
     private Dependency dependency;
 
-    @ApiModelProperty(value = "Information about schema record changes")
-    private AuditDto audit;
-
-    @ApiModelProperty(value = "Information about schema record changes")
-    private SubjectDto subject;
+    @ApiModelProperty(value = "Subjects of this record binding")
+    private List<SubjectDto> subjects;
 }

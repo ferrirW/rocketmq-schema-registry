@@ -53,6 +53,13 @@ public interface GlobalConfig {
     String getDependencyLocalRepositoryPath();
 
     /**
+     * Jdk path for compile.
+     *
+     * @return jdk path
+     */
+    String getDependencyJdkPath();
+
+    /**
      * Remote repository url.
      *
      * @return repository url

@@ -17,14 +17,16 @@
 
 package org.apache.rocketmq.schema.registry.common;
 
+import java.beans.Transient;
 import javax.annotation.Nullable;
 import java.io.Serializable;
 
+import javax.security.auth.Subject;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
+import org.apache.rocketmq.schema.registry.common.model.SubjectInfo;
 
 @Data
 @Builder
@@ -32,29 +34,50 @@ import lombok.NonNull;
 public class QualifiedName implements Serializable {
     private static final long serialVersionUID = 2266514833942841209L;
 
+    private String cluster;
     private String tenant;
     private String subject;
-    private String name;
+    private String schema;
 
     public QualifiedName(
+        @Nullable final String cluster,
         @Nullable final String tenant,
         @Nullable final String subject,
-        @Nullable final String name
+        @Nullable final String schema
     ) {
+        this.cluster= cluster;
         this.tenant= tenant;
         this.subject= subject;
-        this.name = name;
+        this.schema = schema;
+    }
+
+    public SubjectInfo subjectInfo() {
+        return new SubjectInfo(cluster, subject);
+    }
+
+    public String fullName() {
+        return cluster + '/' + tenant + '/' + subject + '/' + schema;
+    }
+
+    public String schemaFullName() {
+        return tenant + '/' + schema;
+    }
+
+    public String subjectFullName() {
+        return cluster + '/' + subject;
     }
 
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("{");
+        sb.append("\"cluster\":\"")
+            .append(cluster).append('\"');
         sb.append("\"tenant\":\"")
             .append(tenant).append('\"');
         sb.append(",\"subject\":\"")
             .append(subject).append('\"');
         sb.append(",\"name\":\"")
-            .append(name).append('\"');
+            .append(schema).append('\"');
         sb.append('}');
         return sb.toString();
     }

@@ -21,6 +21,7 @@ import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.context.StorageServiceContext;
 import org.apache.rocketmq.schema.registry.common.model.BaseInfo;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
 
 public interface StorageService<T extends BaseInfo> {
 
@@ -58,7 +59,7 @@ public interface StorageService<T extends BaseInfo> {
      * @param schemaInfo schema information
      * @throws UnsupportedOperationException If the connector doesn't implement this method
      */
-    default SchemaInfo update(final StorageServiceContext context, final T schemaInfo) {
+    default T update(final StorageServiceContext context, final T schemaInfo) {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
 
@@ -74,9 +75,7 @@ public interface StorageService<T extends BaseInfo> {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
 
-    default T getBySubject(final StorageServiceContext context, final QualifiedName name) {
+    default SchemaRecordInfo getBySubject(final StorageServiceContext context, final QualifiedName name) {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
-
-
 }

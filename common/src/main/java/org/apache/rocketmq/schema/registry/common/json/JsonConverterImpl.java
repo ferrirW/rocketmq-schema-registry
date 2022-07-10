@@ -91,4 +91,9 @@ public class JsonConverterImpl implements JsonConverter {
     public String toString(Object o) {
         return null;
     }
+
+    @Override
+    public byte[] toBytes(String s) {
+        return s.getBytes(StandardCharsets.UTF_8);
+    }
 }

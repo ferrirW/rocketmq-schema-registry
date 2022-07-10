@@ -82,6 +82,16 @@ public class StorageUtil {
     }
 
     /**
+     * Converts from schemaInfo to SchemaDto.
+     *
+     * @param recordInfo schema record info
+     * @return schema dto
+     */
+    public SchemaRecordDto convertToSchemaRecordDto(final SchemaRecordInfo recordInfo) {
+        return mapper.map(recordInfo, SchemaRecordDto.class);
+    }
+
+    /**
      * Converts to the storage service context.
      *
      * @param requestContext request context

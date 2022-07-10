@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaException;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.properties.GlobalConfigImpl;
 import org.apache.rocketmq.schema.registry.common.utils.CommonUtil;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
@@ -50,11 +51,11 @@ import org.eclipse.aether.util.repository.AuthenticationBuilder;
 @Data
 @Slf4j
 public class DynamicCompileProvider {
-
     private final static RepositorySystem system = newRepositorySystem();
 
-    public static DependencyHelper compile(final String parentDir, final SchemaInfo schemaInfo, final String dependencyTemplate) {
-        DependencyHelper dependencyHelper = new DependencyHelper(parentDir, schemaInfo);
+    public static DependencyHelper compile(final String jdkPath, final String parentDir,
+        final SchemaInfo schemaInfo, final String dependencyTemplate) {
+        DependencyHelper dependencyHelper = new DependencyHelper(jdkPath, parentDir, schemaInfo);
 
         dependencyHelper.initIdlFile();
 

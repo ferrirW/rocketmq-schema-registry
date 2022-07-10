@@ -33,4 +33,11 @@ public class BaseInfo implements Serializable {
 
     private AuditInfo audit;
 
+    public String schemaFullName() {
+        return qualifiedName.schemaFullName();
+    }
+
+    public String subjectFullName() {
+        return qualifiedName.subjectFullName();
+    }
 }

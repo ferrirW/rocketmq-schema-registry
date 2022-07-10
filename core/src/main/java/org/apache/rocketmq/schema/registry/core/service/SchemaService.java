@@ -21,6 +21,8 @@ import java.util.Optional;
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.dto.BaseDto;
 import org.apache.rocketmq.schema.registry.common.dto.SchemaDto;
+import org.apache.rocketmq.schema.registry.common.dto.SchemaRecordDto;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
 
 public interface SchemaService<T extends BaseDto> {
 
@@ -56,7 +58,7 @@ public interface SchemaService<T extends BaseDto> {
      * @param qualifiedName tenant / name of the schema
      * @return schema object with the schemaName
      */
-    Optional<T> get(QualifiedName qualifiedName);
+    T get(QualifiedName qualifiedName);
 
     /**
      * Query the schema object with the given subject name.
@@ -64,13 +66,5 @@ public interface SchemaService<T extends BaseDto> {
      * @param qualifiedName subject of the schema binding
      * @return schema object with the schemaName
      */
-    Optional<T> getBySubject(QualifiedName qualifiedName);
-
-    /**
-     * Query if the schema object exists with the given name
-     *
-     * @param qualifiedName tenant / name of the schema
-     * @return boolean
-     */
-    boolean exists(QualifiedName qualifiedName);
+    SchemaRecordDto getBySubject(QualifiedName qualifiedName);
 }

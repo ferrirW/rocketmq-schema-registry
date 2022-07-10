@@ -38,11 +38,13 @@ public class RocketmqConfigConstants {
     public static final String STORAGE_ROCKETMQ_TOPIC_DEFAULT = "schema_registry_storage";
 
     public static final String STORAGE_LOCAL_CACHE_PATH = "storage.local.cache.path";
-    public static final String STORAGE_LOCAL_CACHE_PATH_DEFAULT = "/home/work/app/schema-registry/cache";
+    public static final String STORAGE_LOCAL_CACHE_PATH_DEFAULT = "/tmp/schema-registry/cache";
 
     public static final byte[] STORAGE_ROCKSDB_SCHEMA_DEFAULT_FAMILY = "default".getBytes(StandardCharsets.UTF_8);
     public static final byte[] STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY = "schema".getBytes(StandardCharsets.UTF_8);
     public static final byte[] STORAGE_ROCKSDB_SUBJECT_COLUMN_FAMILY = "subject".getBytes(StandardCharsets.UTF_8);
+
+    public static final String DELETE_KEYS = "%DEL%";
 
 
 }

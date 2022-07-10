@@ -18,15 +18,14 @@
 package org.apache.rocketmq.schema.registry.storage.rocketmq;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Properties;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.context.StoragePluginContext;
 import org.apache.rocketmq.schema.registry.common.json.JsonConverter;
 import org.apache.rocketmq.schema.registry.common.json.JsonConverterImpl;
-import org.apache.rocketmq.schema.registry.common.model.SchemaDetailInfo;
-import org.apache.rocketmq.schema.registry.common.model.SchemaEntity;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
 import org.apache.rocketmq.schema.registry.common.utils.CommonUtil;
 
 @Slf4j
@@ -49,17 +48,17 @@ public class RocketmqStorageClientImpl implements RocketmqStorageClient {
      */
     @Override
     public SchemaInfo register(SchemaInfo schemaInfo) {
-        return rocketmqClient.registerSchema(schemaInfo.getMeta().getSchemaName(), schemaInfo);
+        return rocketmqClient.registerSchema(schemaInfo);
     }
 
     /**
      * Delete rocketmq schema entity.
      *
-     * @param schemaName schema name
+     * @param qualifiedName schema name
      */
     @Override
-    public void delete(String schemaName) {
-        rocketmqClient.delete(schemaName);
+    public void delete(QualifiedName qualifiedName) {
+        rocketmqClient.delete(qualifiedName);
     }
 
     /**
@@ -69,39 +68,28 @@ public class RocketmqStorageClientImpl implements RocketmqStorageClient {
      */
     @Override
     public SchemaInfo update(SchemaInfo schemaInfo) {
-        return rocketmqClient.updateSchema(schemaInfo.getMeta().getSchemaName(), schemaInfo);
+        return rocketmqClient.updateSchema(schemaInfo);
     }
 
     /**
      * Get rocketmq schema entity.
      *
-     * @param schemaName schema name
+     * @param qualifiedName schema name
      */
     @Override
-    public SchemaInfo get(String schemaName) {
-        byte[] result = rocketmqClient.getSchema(schemaName);
+    public SchemaInfo getSchema(QualifiedName qualifiedName) {
+        byte[] result = rocketmqClient.getSchema(qualifiedName);
         return result == null ? null : jsonConverter.fromJson(result, SchemaInfo.class);
     }
 
     /**
      * Get rocketmq schema entity from subject.
      *
-     * @param subject schema name
+     * @param qualifiedName schema name
      */
     @Override
-    public SchemaInfo getBySubject(String subject) {
-        byte[] result = rocketmqClient.getBySubject(subject);
-        if (result == null) {
-            return null;
-        }
-
-        SchemaEntity schemaEntity = jsonConverter.fromJson(result, SchemaEntity.class);
-        SchemaInfo schemaInfo = SchemaInfo.builder()
-            .meta(schemaEntity.getMeta())
-            .details(new SchemaDetailInfo(new ArrayList<>()))
-            .storage(schemaEntity.getStorage())
-            .build();
-        schemaInfo.getDetails().getSchemaRecords().add(schemaEntity.getRecord());
-        return schemaInfo;
+    public SchemaRecordInfo getBySubject(QualifiedName qualifiedName) {
+        byte[] result = rocketmqClient.getBySubject(qualifiedName);
+        return result == null ? null : jsonConverter.fromJson(result, SchemaRecordInfo.class);
     }
 }

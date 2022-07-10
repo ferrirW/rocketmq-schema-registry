@@ -17,7 +17,6 @@
 
 package org.apache.rocketmq.schema.registry.storage.rocketmq;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -26,9 +25,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.rocketmq.client.consumer.DefaultMQPullConsumer;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
-import org.apache.rocketmq.client.consumer.PullResult;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -38,12 +35,15 @@ import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaException;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaExistException;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaNotFoundException;
 import org.apache.rocketmq.schema.registry.common.json.JsonConverter;
 import org.apache.rocketmq.schema.registry.common.json.JsonConverterImpl;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
+import org.apache.rocketmq.schema.registry.common.model.SubjectInfo;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.DBOptions;
@@ -51,6 +51,7 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 
+import static org.apache.rocketmq.schema.registry.storage.rocketmq.configs.RocketmqConfigConstants.DELETE_KEYS;
 import static org.apache.rocketmq.schema.registry.storage.rocketmq.configs.RocketmqConfigConstants.STORAGE_LOCAL_CACHE_PATH;
 import static org.apache.rocketmq.schema.registry.storage.rocketmq.configs.RocketmqConfigConstants.STORAGE_LOCAL_CACHE_PATH_DEFAULT;
 import static org.apache.rocketmq.schema.registry.storage.rocketmq.configs.RocketmqConfigConstants.STORAGE_ROCKETMQ_CONSUMER_GROUP;
@@ -134,36 +135,52 @@ public class RocketmqClient {
             scheduleConsumer.registerMessageListener(new MessageListenerConcurrently() {
                 @Override
                 public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
-                    ColumnFamilyHandle cfHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
                     msgs.forEach(msg -> {
-                        byte[] key = msg.getKeys().getBytes(StandardCharsets.UTF_8);
-                        byte[] value = msg.getBody();
-
                         synchronized (this) {
                             try {
-                                if (value == null) {
-                                    cache.delete(cfHandle, key);
+                                if (msg.getKeys().equals(DELETE_KEYS)) {
+                                    // delete
+                                    byte[] schemaFullName = msg.getBody();
+                                    byte[] schemaInfoBytes = cache.get(schemaCfHandle(), schemaFullName);
+                                    if (schemaInfoBytes != null) {
+                                        deleteAllSubject(converter.fromJson(schemaInfoBytes, SchemaInfo.class));
+                                        cache.delete(schemaCfHandle(), schemaFullName);
+                                    }
                                 } else {
-                                    byte[] result = cache.get(cfHandle, key);
+                                    byte[] schemaFullName = converter.toBytes(msg.getKeys());
+                                    byte[] schemaInfoBytes = msg.getBody();
+                                    SchemaInfo update = converter.fromJson(schemaInfoBytes, SchemaInfo.class);
+                                    byte[] lastRecordBytes = converter.toJsonAsBytes(update.getLastRecord());
+
+                                    byte[] result = cache.get(schemaCfHandle(), schemaFullName);
                                     if (result == null) {
-                                        // first register
-                                        cache.put(cfHandle, key, value);
+                                        // register
+                                        cache.put(schemaCfHandle(), schemaFullName, schemaInfoBytes);
+                                        cache.put(subjectCfHandle(), converter.toBytes(update.subjectFullName()), lastRecordBytes);
                                     } else {
-                                        // update
                                         SchemaInfo current = converter.fromJson(result, SchemaInfo.class);
-                                        SchemaInfo update = converter.fromJson(value, SchemaInfo.class);
-                                        if (current.getLastRecordVersion() >= update.getLastRecordVersion()) {
+                                        if (current.getLastRecordVersion() == update.getLastRecordVersion()) {
+                                            return;
+                                        }
+                                        if (current.getLastRecordVersion() > update.getLastRecordVersion()) {
                                             throw new SchemaException("Schema version is invalid, update: "
                                                 + update.getLastRecordVersion() + ", but current: " + current.getLastRecordVersion());
                                         }
-                                        cache.put(cfHandle, key, value);
+
+                                        cache.put(schemaCfHandle(), schemaFullName, schemaInfoBytes);
+                                        update.getLastRecord().getSubjects().forEach(subject -> {
+                                            try {
+                                                cache.put(subjectCfHandle(), converter.toBytes(subject.fullName()), lastRecordBytes);
+                                            } catch (RocksDBException e) {
+                                                throw new SchemaException("Update schema: " + update.getQualifiedName() + " failed.", e);
+                                            }
+                                        });
                                     }
                                 }
-                            } catch (RocksDBException e) {
-                                throw new SchemaException("put schema to cache failed", e);
+                            } catch (Throwable e) {
+                                throw new SchemaException("Rebuild schema cache failed", e);
                             }
                         }
-
                     });
                     return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
                 }
@@ -175,30 +192,28 @@ public class RocketmqClient {
     }
 
     // TODO: next query on other machine may can't found schema in cache since send is async with receive
-    public SchemaInfo registerSchema(String key, SchemaInfo value) {
-        ColumnFamilyHandle cfHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
-        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-        byte[] valueBytes = converter.toJsonAsBytes(value);
+    public SchemaInfo registerSchema(SchemaInfo schema) {
+        byte[] subjectFullName = converter.toBytes(schema.subjectFullName());
+        byte[] schemaFullName = converter.toBytes(schema.schemaFullName());
+        byte[] schemaInfo = converter.toJsonAsBytes(schema);
+        byte[] lastRecord = converter.toJsonAsBytes(schema.getLastRecord());
 
         try {
             synchronized (this) {
-                if (cache.get(cfHandle, keyBytes) != null) {
-                    throw new SchemaExistException("key: " + key + " is exist.");
+                if (cache.get(schemaCfHandle(), schemaFullName) != null) {
+                    throw new SchemaExistException(schema.getQualifiedName());
                 }
 
-                SendResult result = producer.send(new Message(storageTopic, "", key, valueBytes));
+                SendResult result = producer.send(new Message(storageTopic, "", schema.schemaFullName(), schemaInfo));
                 if (!result.getSendStatus().equals(SendStatus.SEND_OK)) {
-                    throw new SchemaException("Persist key: " + key + " failed");
+                    throw new SchemaException("Register schema: " + schema.getQualifiedName() + " failed: " + result.getSendStatus());
                 }
 
-                if (cache.get(cfHandle, keyBytes) == null) {
-                    if (cache.get(cfHandle, keyBytes) == null) {
-                        cache.put(cfHandle, keyBytes, valueBytes);
-                    }
-                }
+                cache.put(schemaCfHandle(), schemaFullName, schemaInfo);
+                cache.put(subjectCfHandle(), subjectFullName, lastRecord);
             }
 
-            return value;
+            return schema;
         } catch (SchemaException e) {
             throw e;
         } catch (Exception e) {
@@ -206,69 +221,76 @@ public class RocketmqClient {
         }
     }
 
-    public byte[] delete(String key) {
-        ColumnFamilyHandle schemaHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
-        ColumnFamilyHandle subjectHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SUBJECT_COLUMN_FAMILY));
+    public void delete(QualifiedName name) {
+        byte[] schemaFullName = converter.toBytes(name.schemaFullName());
 
-        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
         try {
             synchronized (this) {
-                // empty message mean delete
-                Message msg = new Message(storageTopic, "", key, null);
+                byte[] schemaInfoBytes = cache.get(schemaCfHandle(), schemaFullName);
+                if (schemaInfoBytes == null) {
+                    throw new SchemaNotFoundException(name);
+                }
+
+                Message msg = new Message(storageTopic, "", DELETE_KEYS, schemaFullName);
                 SendResult result = producer.send(msg);
                 if (!result.getSendStatus().equals(SendStatus.SEND_OK)) {
-                    throw new SchemaException("Persist key: " + key + " failed");
-                }
-                cache.delete(schemaHandle, keyBytes);
-                // TODO: delete subject -> schema immediately
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("", e);
-            throw new SchemaException("", e);
-        }
-    }
-
-    public SchemaInfo updateSchema(String key, SchemaInfo value) {
-        ColumnFamilyHandle cfHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
-
-        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-        byte[] valueBytes = converter.toJsonAsBytes(value);
-        try {
-            synchronized (this) {
-                Message msg = new Message(storageTopic, "", key, valueBytes);
-                SendResult result = producer.send(msg);
-
-                if (result.getSendStatus() != SendStatus.SEND_OK) {
-                    throw new SchemaException("Update " + key + " failed when store schema: " + result.getSendStatus());
+                    throw new SchemaException("Delete schema: " + name + " failed: " + result.getSendStatus());
                 }
 
-                cache.put(cfHandle, keyBytes, valueBytes);
+                cache.delete(schemaCfHandle(), schemaFullName);
+                deleteAllSubject(converter.fromJson(schemaInfoBytes, SchemaInfo.class));
             }
-            return value;
         } catch (SchemaException e) {
             throw e;
         } catch (Exception e) {
-            throw new SchemaException("Update schema " + key + " failed", e);
+            throw new SchemaException("Delete schema " + name + " failed", e);
         }
     }
 
-    public byte[] getSchema(String key) {
-        ColumnFamilyHandle cfHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
+    public SchemaInfo updateSchema(SchemaInfo update) {
+        byte[] schemaFullName = converter.toBytes(update.schemaFullName());
+        byte[] schemaInfo = converter.toJsonAsBytes(update);
+        byte[] lastRecord = converter.toJsonAsBytes(update.getLastRecord());
+
+        try {
+            synchronized (this) {
+                Message msg = new Message(storageTopic, "", update.schemaFullName(), schemaInfo);
+                SendResult result = producer.send(msg);
+                if (result.getSendStatus() != SendStatus.SEND_OK) {
+                    throw new SchemaException("Update " + update.getQualifiedName() + " failed: " + result.getSendStatus());
+                }
+
+                cache.put(schemaCfHandle(), schemaFullName, schemaInfo);
+                update.getLastRecord().getSubjects().forEach(subject -> {
+                    try {
+                        cache.put(subjectCfHandle(), converter.toBytes(subject.fullName()), lastRecord);
+                    } catch (RocksDBException e) {
+                        throw new SchemaException("Update schema: " + update.getQualifiedName() + " failed", e);
+                    }
+                });
+            }
+            return update;
+        } catch (SchemaException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SchemaException("Update schema " + update.getQualifiedName() + " failed", e);
+        }
+    }
+
+    public byte[] getSchema(QualifiedName qualifiedName) {
         try {
             // TODO: get from rocketmq topic if cache not contain
-            return cache.get(cfHandle, key.getBytes(StandardCharsets.UTF_8));
+            return cache.get(schemaCfHandle(), converter.toBytes(qualifiedName.schemaFullName()));
         } catch (RocksDBException e) {
-            throw new SchemaException("Get schema " + key + " failed", e);
+            throw new SchemaException("Get schema " + qualifiedName + " failed", e);
         }
     }
 
-    public byte[] getBySubject(String key) {
-        ColumnFamilyHandle cfHandle = cfHandleMap.get(new String(STORAGE_ROCKSDB_SUBJECT_COLUMN_FAMILY));
+    public byte[] getBySubject(QualifiedName qualifiedName) {
         try {
-            return cache.get(cfHandle, key.getBytes(StandardCharsets.UTF_8));
+            return cache.get(subjectCfHandle(), converter.toBytes(qualifiedName.subjectFullName()));
         } catch (RocksDBException e) {
-            throw new SchemaException("Get schema " + key + " failed", e);
+            throw new SchemaException("Get by subject " + qualifiedName + " failed", e);
         }
     }
 
@@ -294,5 +316,29 @@ public class RocketmqClient {
         );
 
         this.converter = new JsonConverterImpl();
+    }
+
+    private ColumnFamilyHandle schemaCfHandle() {
+        return cfHandleMap.get(new String(STORAGE_ROCKSDB_SCHEMA_COLUMN_FAMILY));
+    }
+
+    private ColumnFamilyHandle subjectCfHandle() {
+        return cfHandleMap.get(new String(STORAGE_ROCKSDB_SUBJECT_COLUMN_FAMILY));
+    }
+
+    private void deleteAllSubject(SchemaInfo current) {
+        // delete subjects bind to any version
+        List<SchemaRecordInfo> allSchemaRecords = current.getDetails().getSchemaRecords();
+        List<String> allSubjects = allSchemaRecords.parallelStream()
+            .flatMap(record -> record.getSubjects().stream().map(SubjectInfo::fullName))
+            .collect(Collectors.toList());
+
+        allSubjects.forEach(subject -> {
+            try {
+                cache.delete(subjectCfHandle(), converter.toBytes(subject));
+            } catch (RocksDBException e) {
+                throw new SchemaException("Delete schema " + current.getQualifiedName() + "'s subjects failed", e);
+            }
+        });
     }
 }

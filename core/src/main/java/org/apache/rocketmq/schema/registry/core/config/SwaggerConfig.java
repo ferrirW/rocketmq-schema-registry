@@ -65,7 +65,6 @@ public class SwaggerConfig {
                 .build();
     }
 
-
     private ApiInfo apiInfo(){
 
         //作者信息

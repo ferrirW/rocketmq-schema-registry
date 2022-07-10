@@ -24,6 +24,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
+@Deprecated
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Builder

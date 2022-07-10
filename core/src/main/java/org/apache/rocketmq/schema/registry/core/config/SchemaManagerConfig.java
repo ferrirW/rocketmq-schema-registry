@@ -18,8 +18,6 @@
 package org.apache.rocketmq.schema.registry.core.config;
 
 import org.apache.rocketmq.schema.registry.common.properties.GlobalConfig;
-import org.apache.rocketmq.schema.registry.common.utils.IdGenerator;
-import org.apache.rocketmq.schema.registry.common.utils.SnowFlakeIdGenerator;
 import org.apache.rocketmq.schema.registry.core.dependency.ArtifactoryDependencyServiceImpl;
 import org.apache.rocketmq.schema.registry.core.dependency.DependencyService;
 import org.apache.rocketmq.schema.registry.common.storage.StorageManager;

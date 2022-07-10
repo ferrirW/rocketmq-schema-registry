@@ -20,10 +20,10 @@ package org.apache.rocketmq.schema.registry.common.model;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.apache.rocketmq.schema.registry.common.exception.SchemaException;
 
 @Data
 @NoArgsConstructor
@@ -31,21 +31,29 @@ import lombok.NoArgsConstructor;
 public class SchemaRecordInfo implements Serializable {
     private static final long serialVersionUID = 6215296681034788729L;
 
+    private String schema;
+    private long schemaId;
     private long version;
     private String idl;
-    private List<FieldInfo> fields;
     private Dependency dependency;
-    private AuditInfo audit;
-    private SubjectInfo subject;
+    private List<SubjectInfo> subjects;
+    //    private List<FieldInfo> fields;
 
-    public void addTopic(final String topic) {
-        if (getSubject() == null) {
-            setSubject(new SubjectInfo(new ArrayList<>()));
+    public void bindSubject(final SubjectInfo subjectInfo) {
+        if (getSubjects() == null) {
+            setSubjects(new ArrayList<>());
         }
-        getSubject().getTopics().add(topic);
+        getSubjects().add(subjectInfo);
     }
 
-    public void removeTopic(final String topic) {
-        getSubject().getTopics().remove(topic);
+    public void unbindSubject(final SubjectInfo subjectInfo) {
+        getSubjects().remove(subjectInfo);
+    }
+
+    public SubjectInfo lastBindSubject() {
+        if (getSubjects() == null) {
+            throw new SchemaException("Schema record haven't bind any subject");
+        }
+        return getSubjects().get(subjects.size() - 1);
     }
 }

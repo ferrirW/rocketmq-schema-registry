@@ -21,9 +21,11 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.model.StorageType;
 
+@Slf4j
 public class GlobalConfigImpl implements GlobalConfig {
 
     private final SchemaProperties schemaProperties;
@@ -50,6 +52,11 @@ public class GlobalConfigImpl implements GlobalConfig {
     @Override
     public String getDependencyLocalRepositoryPath() {
         return schemaProperties.getDependency().getLocalRepositoryPath();
+    }
+
+    @Override
+    public String getDependencyJdkPath() {
+        return schemaProperties.getDependency().getJdkPath();
     }
 
     @Override

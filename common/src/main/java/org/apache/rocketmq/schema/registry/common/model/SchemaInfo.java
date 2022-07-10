@@ -41,7 +41,7 @@ public class SchemaInfo extends BaseInfo {
     private Map<String, String> extras;
 
     public String getSchemaName() {
-        return getQualifiedName().getName();
+        return getQualifiedName().getSchema();
     }
 
     public String getNamespace() {
@@ -57,7 +57,7 @@ public class SchemaInfo extends BaseInfo {
     }
 
     public String getLastRecordIdl() {
-        return getDetails().lastRecord().getIdl();
+        return getLastRecord().getIdl();
     }
 
     public long getUniqueId() {
@@ -66,18 +66,19 @@ public class SchemaInfo extends BaseInfo {
 
     public void setUniqueId(long uniqueId) {
         getMeta().setUniqueId(uniqueId);
+        getLastRecord().setSchemaId(uniqueId);
     }
 
     public void setLastRecordDependency(Dependency dependency) {
-        getDetails().lastRecord().setDependency(dependency);
+        getLastRecord().setDependency(dependency);
     }
 
     public long getLastRecordVersion() {
-        return getDetails().lastRecord().getVersion();
+        return getLastRecord().getVersion();
     }
 
     public void setLastRecordVersion(long version) {
-        getDetails().lastRecord().setVersion(version);
+        getLastRecord().setVersion(version);
     }
 
 }

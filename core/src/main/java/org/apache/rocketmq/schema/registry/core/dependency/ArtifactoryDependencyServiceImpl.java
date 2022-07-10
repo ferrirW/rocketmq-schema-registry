@@ -34,20 +34,25 @@ public class ArtifactoryDependencyServiceImpl implements DependencyService {
     private final GlobalConfig config;
     private final String parent;
     private final String localRepo;
-    private final String dependencyTemplate;
+    private final String jdkPath;
+    private String dependencyTemplate;
+
 
     public ArtifactoryDependencyServiceImpl(final GlobalConfig config) {
         this.config = config;
         this.parent = config.getDependencyCompilePath();
         this.localRepo = config.getDependencyLocalRepositoryPath();
+        this.jdkPath = config.getDependencyJdkPath();
 
-        try {
-            CommonUtil.mkdir(parent);
-            CommonUtil.mkdir(localRepo);
-            Path templatePath = Paths.get(config.getDependencyTemplate());
-            this.dependencyTemplate = new String(Files.readAllBytes(templatePath));
-        } catch (IOException e) {
-            throw new SchemaException("Init dependency template file failed", e);
+        if (config.isUploadEnabled()) {
+            try {
+                CommonUtil.mkdir(parent);
+                CommonUtil.mkdir(localRepo);
+                Path templatePath = Paths.get(config.getDependencyTemplate());
+                this.dependencyTemplate = new String(Files.readAllBytes(templatePath));
+            } catch (IOException e) {
+                throw new SchemaException("Init dependency template file failed", e);
+            }
         }
     }
 
@@ -56,7 +61,8 @@ public class ArtifactoryDependencyServiceImpl implements DependencyService {
      */
     @Override
     public Dependency compile(SchemaInfo schemaInfo) {
-        DependencyHelper dependencyHelper = DynamicCompileProvider.compile(parent, schemaInfo, dependencyTemplate);
+        DependencyHelper dependencyHelper = DynamicCompileProvider
+            .compile(jdkPath, parent, schemaInfo, dependencyTemplate);
 
         // upload jar file to remote repository
         DynamicCompileProvider.upload(

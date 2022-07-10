@@ -25,11 +25,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.context.RequestContext;
 import org.apache.rocketmq.schema.registry.common.auth.AccessControlService;
+import org.apache.rocketmq.schema.registry.common.dto.SchemaRecordDto;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaException;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaExistException;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaCompatibilityException;
 import org.apache.rocketmq.schema.registry.common.model.Dependency;
 import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
+import org.apache.rocketmq.schema.registry.common.model.SubjectInfo;
 import org.apache.rocketmq.schema.registry.common.properties.GlobalConfig;
 import org.apache.rocketmq.schema.registry.common.dto.SchemaDto;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
@@ -85,10 +87,16 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
         // TODO: add user and ak sk
         accessController.checkPermission("", qualifiedName.getTenant(), SchemaOperation.REGISTER);
 
+        SchemaInfo current = storageServiceProxy.get(qualifiedName, config.isCacheEnabled());
+        if (current != null) {
+            throw new SchemaExistException(qualifiedName);
+        }
+
         SchemaInfo schemaInfo = storageUtil.convertFromSchemaDto(schemaDto);
         schemaInfo.setUniqueId(idGenerator.nextId());
         schemaInfo.setLastRecordVersion(1L);
-        schemaInfo.getLastRecord().addTopic(qualifiedName.getSubject());
+        schemaInfo.getLastRecord().setSchema(qualifiedName.schemaFullName());
+        schemaInfo.getLastRecord().bindSubject(qualifiedName.subjectInfo());
 
         if (config.isUploadEnabled()) {
             // TODO: async upload to speed up register operation and keep atomic with register
@@ -109,8 +117,6 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
         final RequestContext requestContext = RequestContextManager.getContext();
         log.info("update get request context: " + requestContext);
 
-        checkSchemaValid(schemaDto);
-
         this.accessController.checkPermission("", "", SchemaOperation.UPDATE);
 
         SchemaInfo current = storageServiceProxy.get(qualifiedName, config.isCacheEnabled());
@@ -120,16 +126,43 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
 
         SchemaInfo update = storageUtil.convertFromSchemaDto(schemaDto);
 
+        if (update.getDetails() != null) {
+            SubjectInfo subjectInfo = qualifiedName.subjectInfo();
+            SchemaRecordInfo updateRecord = update.getDetails().lastRecord();
+            updateRecord.setVersion(current.getLastRecordVersion() + 1);
+            updateRecord.setSchema(qualifiedName.schemaFullName());
+            updateRecord.setSchemaId(current.getUniqueId());
+            updateRecord.bindSubject(subjectInfo);
+            current.getLastRecord().unbindSubject(subjectInfo);
+
+            List<SchemaRecordInfo> currentRecords = new ArrayList<>(current.getDetails().getSchemaRecords());
+            currentRecords.add(updateRecord);
+            update.getDetails().setSchemaRecords(currentRecords);
+        }
+
+        if (update.getMeta() == null) {
+            update.setMeta(current.getMeta());
+        }
+
+        if (update.getStorage() == null) {
+            update.setStorage(current.getStorage());
+        }
+
+        if (update.getExtras() == null) {
+            update.setExtras(current.getExtras());
+        }
+
+        if (update.getAudit() == null) {
+            // todo
+            update.setAudit(current.getAudit());
+        }
+
+        if (update.getQualifiedName() == null) {
+            update.setQualifiedName(current.getQualifiedName());
+        }
+
+//        checkSchemaValid(schemaDto);
         CommonUtil.validateCompatibility(update, current, current.getMeta().getCompatibility());
-
-        SchemaRecordInfo updateRecord = update.getDetails().lastRecord();
-        updateRecord.setVersion(current.getLastRecordVersion() + 1);
-        updateRecord.addTopic(qualifiedName.getSubject());
-        current.getLastRecord().removeTopic(qualifiedName.getSubject());
-
-        List<SchemaRecordInfo> currentRecords = new ArrayList<>(current.getDetails().getSchemaRecords());
-        currentRecords.add(updateRecord);
-        update.getDetails().setSchemaRecords(currentRecords);
 
         if (config.isUploadEnabled()) {
             Dependency dependency = dependencyService.compile(update);
@@ -166,7 +199,7 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
      * {@inheritDoc}
      */
     @Override
-    public Optional<SchemaDto> get(QualifiedName qualifiedName) {
+    public SchemaDto get(QualifiedName qualifiedName) {
         final RequestContext requestContext = RequestContextManager.getContext();
         log.info("register get request context: " + requestContext);
 
@@ -175,47 +208,33 @@ public class SchemaServiceImpl implements SchemaService<SchemaDto> {
         this.accessController.checkPermission("", qualifiedName.getTenant(), SchemaOperation.GET);
 
         SchemaInfo schemaInfo = storageServiceProxy.get(qualifiedName, config.isCacheEnabled());
-        SchemaDto schemaDto = storageUtil.convertToSchemaDto(schemaInfo);
+        if (schemaInfo == null) {
+            throw new SchemaNotFoundException(qualifiedName);
+        }
 
-        log.info("get schema {}/{}", qualifiedName, schemaDto);
-        return Optional.ofNullable(schemaDto);
+        log.info("get schema {}", qualifiedName);
+        return storageUtil.convertToSchemaDto(schemaInfo);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Optional<SchemaDto> getBySubject(QualifiedName qualifiedName) {
+    public SchemaRecordDto getBySubject(QualifiedName qualifiedName) {
         final RequestContext requestContext = RequestContextManager.getContext();
         log.info("register get request context: " + requestContext);
 
 //        CommonUtil.validateName(qualifiedName);
         this.accessController.checkPermission("", qualifiedName.getSubject(), SchemaOperation.GET);
 
-        log.info("get schema by subject: {}", qualifiedName.getSubject());
-        SchemaDto schemaDto = null;
-        SchemaInfo schemaInfo = null;
-
-        try {
-            schemaInfo = storageServiceProxy.getBySubject(qualifiedName, config.isCacheEnabled());
-
-            schemaDto = storageUtil.convertToSchemaDto(schemaInfo);
-        } catch (Exception e) {
-            throw new SchemaException("", e);
+        SchemaRecordInfo recordInfo = storageServiceProxy.getBySubject(qualifiedName, config.isCacheEnabled());
+        if (recordInfo == null) {
+            throw new SchemaException("Subject: " + qualifiedName + " not exist");
         }
 
-        log.info("get schema {}/{}", schemaInfo, schemaDto);
-        return Optional.of(schemaDto);
+        log.info("get schema by subject: {}", qualifiedName.getSubject());
+        return storageUtil.convertToSchemaRecordDto(recordInfo);
     }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean exists(QualifiedName qualifiedName) {
-        return get(qualifiedName).isPresent();
-    }
-
 
     private void checkSchemaExist(final QualifiedName qualifiedName) {
         if (storageServiceProxy.get(qualifiedName, config.isCacheEnabled()) != null) {

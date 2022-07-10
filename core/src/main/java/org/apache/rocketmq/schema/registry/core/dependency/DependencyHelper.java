@@ -54,13 +54,14 @@ public class DependencyHelper {
     private String idlFilePath;
     private String jarFilePath;
     private String pomFilePath;
+    private String jdkPath;
 
     private String idl;
 
     Map<String, ByteBuffer> schemaJarClass;
     private Dependency dependency;
 
-    public DependencyHelper(final String parentDir, final SchemaInfo schemaInfo) {
+    public DependencyHelper(final String jdkPath, final String parentDir, final SchemaInfo schemaInfo) {
         this.schemaName = schemaInfo.getSchemaName();
 
         this.dependency = Dependency.builder()
@@ -69,13 +70,14 @@ public class DependencyHelper {
             .version(schemaInfo.getSchemaType() + "." + schemaInfo.getLastRecordVersion())
             .build();
 
-        this.schemaDir = String.format("%s/%d/%d", parentDir, schemaInfo.getUniqueId(), schemaInfo.getLastRecordVersion());
+        this.schemaDir = String.format("%s/%s/%d", parentDir, schemaInfo.getSchemaName(), schemaInfo.getLastRecordVersion());
         this.idlDir = String.format("%s/avro", schemaDir);
         this.javaDir = String.format("%s/java", schemaDir);
 
         this.idlFilePath = String.format("%s/%s.avro", idlDir, schemaName);
         this.jarFilePath = String.format("%s/%s.jar", schemaDir, dependency.getArtifactId());
         this.pomFilePath = String.format("%s/%s.pom", schemaDir, dependency.getArtifactId());
+        this.jdkPath = jdkPath;
 
         this.idl = schemaInfo.getLastRecordIdl();
     }
@@ -89,20 +91,20 @@ public class DependencyHelper {
             throw new SchemaException("Init idl file failed", e);
         }
 
-        log.info("write schema " + schemaName + "'s idl: " + idl + " to file " + idlFilePath + "success");
+        log.info("write schema " + schemaName + "'s idl: " + idl + " to file " + idlFilePath + " success");
     }
 
     public Map<String, ByteBuffer> compileSchema() {
         CommonUtil.mkdir(javaDir);
         try (Stream<Path> pathStream = Files.walk(Paths.get(javaDir))) {
-            CommonUtil.execCommand("java", "-jar", "tools/avro-tools-1.11.0.jar", idlFilePath, javaDir);
+            CommonUtil.execCommand(jdkPath, "-jar", "tools/avro-tools-1.11.0.jar", "compile", "schema", idlFilePath, javaDir);
             List<File> javaFileList = pathStream
                 .filter(Files::isRegularFile)
                 .map(Path::toFile)
                 .collect(Collectors.toList());
             log.info("Success flush java files: " + javaFileList);
             return CommonUtil.compileJavaFile(javaFileList);
-        } catch (IOException | InterruptedException e){
+        } catch (Throwable e){
             throw new SchemaException("Compile schema failed", e);
         }
     }

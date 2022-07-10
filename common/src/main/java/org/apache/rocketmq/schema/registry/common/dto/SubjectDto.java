@@ -32,6 +32,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class SubjectDto {
 
-    @ApiModelProperty(value = "Topics of this schema record binding", required = true)
-    private List<String> topics;
+    @ApiModelProperty(value = "Cluster of this subject", required = true)
+    private String cluster;
+
+    @ApiModelProperty(value = "Name of this subject", required = true)
+    private String subject;
 }

@@ -16,8 +16,8 @@ import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.dto.SchemaDto;
+import org.apache.rocketmq.schema.registry.common.dto.SchemaRecordDto;
 import org.apache.rocketmq.schema.registry.common.exception.SchemaNotFoundException;
-import org.apache.rocketmq.schema.registry.common.utils.CommonUtil;
 import org.apache.rocketmq.schema.registry.core.api.RequestProcessor;
 import org.apache.rocketmq.schema.registry.core.service.SchemaService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,7 +66,7 @@ public class SchemaController {
 
     @RequestMapping(
         method = RequestMethod.POST,
-        path = "/subject/{subject-name}/schema/{schema-name}",
+        path = "/cluster/{cluster-name}/subject/{subject-name}/schema/{schema-name}",
         consumes = MediaType.APPLICATION_JSON_VALUE
     )
     @ResponseStatus(HttpStatus.CREATED)
@@ -86,7 +86,9 @@ public class SchemaController {
             )
         }
     )
-    public SchemaDto registerSchemaBySubject(
+    public SchemaDto registerSchema(
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable(name = "cluster-name") final String clusterName,
         @ApiParam(value = "The subject of the schema", required = true)
         @PathVariable(name = "subject-name") final String subjectName,
         @ApiParam(value = "The name of the schema", required = true)
@@ -94,21 +96,12 @@ public class SchemaController {
         @ApiParam(value = "The schema detail", required = true)
         @RequestBody final SchemaDto schemaDto
     ) {
-        // TODO: support register by sql
-        final QualifiedName name = new QualifiedName("default", subjectName, schemaName);
-        return this.requestProcessor.processRequest(
-            name,
-            "register",
-            () -> {
-                CommonUtil.validateName(name);
-                return this.schemaService.register(name, schemaDto);
-            }
-        );
+        return registerSchema(clusterName, "default", subjectName, schemaName, schemaDto);
     }
 
     @RequestMapping(
         method = RequestMethod.POST,
-        path = "/tenant/{tenant-name}/subject/{subject-name}/schema/{schema-name}",
+        path = "/cluster/{cluster-name}/tenant/{tenant-name}/subject/{subject-name}/schema/{schema-name}",
         consumes = MediaType.APPLICATION_JSON_VALUE
     )
     @ResponseStatus(HttpStatus.CREATED)
@@ -128,25 +121,26 @@ public class SchemaController {
             )
         }
     )
-    public SchemaDto registerSchemaByTenant(
-        @ApiParam(value = "The tenant of the schema", required = false)
-        @PathVariable(value = "tenant-name", required = false) final String tenant,
-        @ApiParam(value = "The subject of the schema", required = false)
-        @PathVariable(name = "subject-name", required = false) final String subjectName,
+    public SchemaDto registerSchema(
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable(value = "cluster-name") final String cluster,
+        @ApiParam(value = "The tenant of the schema", required = true)
+        @PathVariable(value = "tenant-name") final String tenant,
+        @ApiParam(value = "The subject of the schema", required = true)
+        @PathVariable(name = "subject-name") final String subject,
         @ApiParam(value = "The name of the schema", required = true)
         @PathVariable("schema-name") final String schemaName,
         @ApiParam(value = "The schema detail", required = true)
         @RequestBody final SchemaDto schemaDto
     ) {
         // TODO: support register by sql
-        final QualifiedName name = new QualifiedName(tenant, subjectName, schemaName);
+        final QualifiedName name = new QualifiedName(cluster, tenant, subject, schemaName);
+        schemaDto.setQualifiedName(name);
+
         return this.requestProcessor.processRequest(
             name,
             "register",
             () -> {
-                if (CommonUtil.isQualifiedNameEmpty(schemaDto.getQualifiedName())) {
-                    schemaDto.setQualifiedName(name);
-                }
                 return this.schemaService.register(name, schemaDto);
             }
         );
@@ -179,7 +173,7 @@ public class SchemaController {
         @ApiParam(value = "The name of the schema", required = true)
         @PathVariable("schema-name") final String schemaName
     ) {
-        QualifiedName name = new QualifiedName(tenant, null, schemaName);
+        QualifiedName name = new QualifiedName(null, tenant, null, schemaName);
         return this.requestProcessor.processRequest(
             name,
             "deleteSchema",
@@ -188,48 +182,7 @@ public class SchemaController {
     }
 
     @RequestMapping(
-        path = "/subject/{subject-name}/schema/{schema-name}",
-        method = RequestMethod.PUT,
-        consumes = MediaType.APPLICATION_JSON_VALUE
-    )
-    @ApiOperation(
-        value = "Update schema and generate new schema version",
-        notes = "Update the given schema"
-    )
-    @ApiResponses(
-        {
-            @ApiResponse(
-                code = HttpURLConnection.HTTP_OK,
-                message = "Update schema success"
-            ),
-            @ApiResponse(
-                code = HttpURLConnection.HTTP_NOT_FOUND,
-                message = "The requested schema cannot be found"
-            )
-        }
-    )
-    public SchemaDto updateSchemaBySubject(
-        @ApiParam(value = "The subject of the schema", required = true)
-        @PathVariable("subject-name") final String subject,
-        @ApiParam(value = "The name of the schema", required = true)
-        @PathVariable("schema-name") final String schemaName,
-        @ApiParam(value = "The schema detail", required = true)
-        @RequestBody final SchemaDto schemaDto
-    ) {
-        QualifiedName name = new QualifiedName("default", subject, schemaName);
-
-        return this.requestProcessor.processRequest(
-            name,
-            "updateSchema",
-            () -> {
-                // TODO check schema name equals older
-                return this.schemaService.update(name, schemaDto);
-            }
-        );
-    }
-
-    @RequestMapping(
-        path = "/tenant/{tenant-name}/schema/{schema-name}",
+        path = "/cluster/{cluster-name}/subject/{subject-name}/schema/{schema-name}",
         method = RequestMethod.PUT,
         consumes = MediaType.APPLICATION_JSON_VALUE
     )
@@ -250,28 +203,62 @@ public class SchemaController {
         }
     )
     public SchemaDto updateSchema(
-        @ApiParam(value = "The tenant of the schema", required = true)
-        @PathVariable("tenant-name") final String tenant,
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable("cluster-name") final String cluster,
+        @ApiParam(value = "The subject of the schema", required = true)
+        @PathVariable("subject-name") final String subject,
         @ApiParam(value = "The name of the schema", required = true)
         @PathVariable("schema-name") final String schemaName,
         @ApiParam(value = "The schema detail", required = true)
         @RequestBody final SchemaDto schemaDto
     ) {
-        QualifiedName name = new QualifiedName(tenant, null, schemaName);
+        return this.updateSchema(cluster, "default", subject, schemaName, schemaDto);
+    }
 
+    @RequestMapping(
+        path = "/cluster/{cluster-name}/tenant/{tenant-name}/subject/{subject-name}/schema/{schema-name}",
+        method = RequestMethod.PUT,
+        consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    @ApiOperation(
+        value = "Update schema and generate new schema version",
+        notes = "Update the given schema"
+    )
+    @ApiResponses(
+        {
+            @ApiResponse(
+                code = HttpURLConnection.HTTP_OK,
+                message = "Update schema success"
+            ),
+            @ApiResponse(
+                code = HttpURLConnection.HTTP_NOT_FOUND,
+                message = "The requested schema cannot be found"
+            )
+        }
+    )
+    public SchemaDto updateSchema(
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable(value = "cluster-name") final String cluster,
+        @ApiParam(value = "The tenant of the schema", required = true)
+        @PathVariable(value = "tenant-name") final String tenant,
+        @ApiParam(value = "The subject of the schema", required = true)
+        @PathVariable(name = "subject-name") final String subject,
+        @ApiParam(value = "The name of the schema", required = true)
+        @PathVariable("schema-name") final String schemaName,
+        @ApiParam(value = "The schema detail", required = true)
+        @RequestBody final SchemaDto schemaDto
+    ) {
+        QualifiedName name = new QualifiedName(cluster, tenant, subject, schemaName);
         return this.requestProcessor.processRequest(
             name,
             "updateSchema",
-            () -> {
-                // TODO check schema name equals older
-                return this.schemaService.update(name, schemaDto);
-            }
+            () -> this.schemaService.update(name, schemaDto)
         );
     }
 
     @RequestMapping(
         method = RequestMethod.GET,
-        path = "/tenant/{tenant-name}/schema/{schema-name}"
+        path = "/cluster/{cluster-name}/tenant/{tenant-name}/subject/{subject-name}/schema/{schema-name}"
     )
     @ApiOperation(
         value = "Schema information",
@@ -289,22 +276,21 @@ public class SchemaController {
         }
     )
     public SchemaDto getSchema(
-        @ApiParam(value = "The name of the tenant", required = true)
-        @PathVariable("tenant-name") String tenant,
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable(value = "cluster-name") final String cluster,
+        @ApiParam(value = "The tenant of the schema", required = true)
+        @PathVariable(value = "tenant-name") final String tenant,
+        @ApiParam(value = "The subject of the schema", required = true)
+        @PathVariable(name = "subject-name") final String subject,
         @ApiParam(value = "The name of the schema", required = true)
-        @PathVariable("schema-name") String schemaName
+        @PathVariable("schema-name") final String schemaName
     ) {
-        log.info("tenant: {}, name: {}", tenant, schemaName);
-
-        QualifiedName name = new QualifiedName(tenant, null, schemaName);
-        log.info("Request for get schet for get schema: {}", name);
+        QualifiedName name = new QualifiedName(cluster, tenant, subject, schemaName);
+        log.info("Request for get schema for schema: {}", name.fullName());
         return this.requestProcessor.processRequest(
             name,
             "getSchema",
-            () -> {
-                Optional<SchemaDto> schema = schemaService.get(name);
-                return schema.orElseThrow(() -> new SchemaNotFoundException(name));
-            }
+            () -> schemaService.get(name)
         );
     }
 
@@ -327,28 +313,20 @@ public class SchemaController {
             )
         }
     )
-    public SchemaDto getSchemaBySubject(
+    public SchemaRecordDto getSchemaBySubject(
         @ApiParam(value = "The name of the schema", required = true)
         @PathVariable("subject-name") String subject
     ) {
-        QualifiedName name = new QualifiedName("default", subject, null);
-
-        return this.requestProcessor.processRequest(
-            "getSchema",
-            () -> {
-                Optional<SchemaDto> schema = schemaService.getBySubject(name);
-                return schema.orElseThrow(() -> new SchemaNotFoundException(subject));
-            }
-        );
+        return getSchemaBySubject("default", subject);
     }
 
     @RequestMapping(
         method = RequestMethod.GET,
-        path = "/schema/{schema-name}/latest_version"
+        path = "/cluster/{cluster-name}/subject/{subject-name}"
     )
     @ApiOperation(
         value = "Schema information",
-        notes = "Schema information for the given schema name under the tenant")
+        notes = "Schema information for the given schema name under the subject")
     @ApiResponses(
         {
             @ApiResponse(
@@ -361,18 +339,17 @@ public class SchemaController {
             )
         }
     )
-    public SchemaDto getSchemaLatestVersion(
-        @ApiParam(value = "The name of the schema", required = true)
-        @PathVariable("schema-name") String schemaName
+    public SchemaRecordDto getSchemaBySubject(
+        @ApiParam(value = "The cluster of the subject", required = true)
+        @PathVariable("cluster-name") String cluster,
+        @ApiParam(value = "The name of the subject", required = true)
+        @PathVariable("subject-name") String subject
     ) {
-        QualifiedName name = new QualifiedName("default", null, schemaName);
+        QualifiedName name = new QualifiedName(cluster, null, subject, null);
+
         return this.requestProcessor.processRequest(
-            name,
-            "getSchema",
-            () -> {
-                Optional<SchemaDto> schema = schemaService.get(name);
-                return schema.orElseThrow(() -> new SchemaNotFoundException(name));
-            }
+            "getSchemaBySubject",
+            () -> schemaService.getBySubject(name)
         );
     }
 }

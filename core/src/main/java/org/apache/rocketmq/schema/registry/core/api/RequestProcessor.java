@@ -66,7 +66,7 @@ public class RequestProcessor {
     public <R> R processRequest(
         final String requestName,
         final Supplier<R> supplier) {
-        // TODO: add rate limiter and metrics statics
+        long time = System.currentTimeMillis();
         try {
             log.info("Handling request: {}", requestName);
             return supplier.get();
@@ -74,6 +74,8 @@ public class RequestProcessor {
             throw e;
         }  catch (Throwable e) {
             throw new SchemaException(String.format("Request: %s failed due to %s %s", requestName, e.getMessage(), e.getCause()), e);
+        } finally {
+            log.info("Handle request: {} cost {}", requestName, (System.currentTimeMillis() - time));
         }
     }
 }

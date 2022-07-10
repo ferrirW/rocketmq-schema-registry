@@ -21,11 +21,12 @@ import lombok.Data;
 
 @Data
 public class DependencyProperties {
-    private boolean uploadEnabled = true;
-    private String compilePath = "/home/work/app/schema-registry/dependency/data";
-    private String localRepositoryPath = "/home/work/app/schema-registry/repository";
-    private String repositoryUrl = "${}";
-    private String username = "";
-    private String password = "";
-    private String template =  "core/src/main/resources/template.pom";
+    private boolean uploadEnabled;
+    private String compilePath;
+    private String jdkPath;
+    private String localRepositoryPath;
+    private String repositoryUrl;
+    private String username;
+    private String password;
+    private String template = "core/src/main/resources/template.pom";
 }

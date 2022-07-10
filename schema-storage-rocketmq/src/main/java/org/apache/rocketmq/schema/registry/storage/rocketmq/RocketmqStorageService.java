@@ -19,9 +19,8 @@ package org.apache.rocketmq.schema.registry.storage.rocketmq;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
-import org.apache.rocketmq.schema.registry.common.exception.SchemaException;
-import org.apache.rocketmq.schema.registry.common.exception.SchemaNotFoundException;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
 import org.apache.rocketmq.schema.registry.common.storage.StorageService;
 import org.apache.rocketmq.schema.registry.common.context.StorageServiceContext;
 
@@ -52,7 +51,7 @@ public class RocketmqStorageService implements StorageService<SchemaInfo> {
      */
     @Override
     public void delete(StorageServiceContext context, QualifiedName name) {
-        storageClient.delete(name.getName());
+        storageClient.delete(name);
     }
 
     /**
@@ -68,14 +67,14 @@ public class RocketmqStorageService implements StorageService<SchemaInfo> {
      */
     @Override
     public SchemaInfo get(StorageServiceContext context, QualifiedName name) {
-        return storageClient.get(name.getName());
+        return storageClient.getSchema(name);
     }
 
     /**
      * {@inheritDoc}.
      */
     @Override
-    public SchemaInfo getBySubject(StorageServiceContext context, QualifiedName name) {
-        return storageClient.getBySubject(name.getSubject());
+    public SchemaRecordInfo getBySubject(StorageServiceContext context, QualifiedName name) {
+        return storageClient.getBySubject(name);
     }
 }

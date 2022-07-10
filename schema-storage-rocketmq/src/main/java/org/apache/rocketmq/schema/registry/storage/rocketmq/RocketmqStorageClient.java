@@ -19,6 +19,7 @@ package org.apache.rocketmq.schema.registry.storage.rocketmq;
 
 import org.apache.rocketmq.schema.registry.common.QualifiedName;
 import org.apache.rocketmq.schema.registry.common.model.SchemaInfo;
+import org.apache.rocketmq.schema.registry.common.model.SchemaRecordInfo;
 
 public interface RocketmqStorageClient {
 
@@ -39,9 +40,9 @@ public interface RocketmqStorageClient {
     /**
      * Delete rocketmq schema entity.
      *
-     * @param schemaName schema name
+     * @param qualifiedName schema name
      */
-    default void delete(String schemaName) {
+    default void delete(QualifiedName qualifiedName) {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
 
@@ -57,13 +58,18 @@ public interface RocketmqStorageClient {
     /**
      * Get rocketmq schema entity.
      *
-     * @param schemaName schema name
+     * @param qualifiedName schema name
      */
-    default SchemaInfo get(String schemaName) {
+    default SchemaInfo getSchema(QualifiedName qualifiedName) {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
 
-    default SchemaInfo getBySubject(String subject) {
+    /**
+     * Get rocketmq schema entity by subject.
+     *
+     * @param qualifiedName schema name
+     */
+    default SchemaRecordInfo getBySubject(QualifiedName qualifiedName) {
         throw new UnsupportedOperationException(ERROR_MESSAGE_DEFAULT);
     }
 }
